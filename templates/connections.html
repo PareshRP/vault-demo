@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Vault Connections · Vault Change Portal{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div><div class="eyebrow">SECURE CONFIGURATION</div><h1>Vault connections</h1><p class="lede">Connect each environment using its HTTPS Vault address and a short-lived or least-privilege token.</p></div>
+</section>
+{% if mode == 'DEMO' %}
+<div class="connection-notice"><strong>Demo mode is network-isolated.</strong><p>To configure real connections, set <code>DRY_RUN = False</code> in <code>app.py</code> and restart the app. Demo mode will never test or contact any Vault address.</p></div>
+{% else %}
+<div class="connection-notice"><strong>Credentials stay in process memory only.</strong><p>Tokens are submitted to this local app, held by the server only after a successful token check, never written to disk/session, and lost when the process restarts. Use this on a trusted machine only.</p></div>
+{% endif %}
+<section class="connection-grid">
+{% for name, item in environments.items() %}
+  <article class="connection-card">
+    <div class="connection-card-heading"><div><span class="connection-label">ENVIRONMENT</span><h2>{{ name }}</h2></div><span class="connection-state {{ 'state-connected' if name in connections or connection_status[name] == 'environment token configured' else 'state-empty' }}">{{ 'CONNECTED IN MEMORY' if name in connections else 'NOT CONFIGURED' }}</span></div>
+    {% if name in connections %}<p class="connection-address"><small>Vault address</small><code>{{ connections[name].address }}</code></p>{% else %}<p class="connection-address"><small>Vault address</small><code>{{ item.url }}</code><span>No connection configured yet.</span></p>{% endif %}
+    {% if mode == 'REAL' %}
+    <form method="post" action="{{ url_for('add_connection') }}" class="connection-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="environment" value="{{ name }}">
+      <label>Vault HTTPS address<input name="address" type="url" value="{{ connections[name].address if name in connections else item.url }}" placeholder="https://vault.example.com" autocomplete="url" required></label>
+      <label>Vault token<input name="token" type="password" autocomplete="new-password" placeholder="Paste token to verify connection" required maxlength="4096"></label>
+      <button class="btn btn-primary" type="submit">Verify & save connection <span>→</span></button>
+    </form>
+    {% if name in connections %}<form method="post" action="{{ url_for('remove_connection', environment=name) }}" class="remove-connection"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost" type="submit">Remove in-memory connection</button></form>{% endif %}
+    {% else %}<p class="connection-disabled">Switch to REAL mode to add or test connections. The form is intentionally disabled in DEMO mode.</p>{% endif %}
+  </article>
+{% endfor %}
+</section>
+<section class="connection-help"><h2>Production recommendations</h2><ul><li>Use a dedicated token with minimum read/write access to the required KV v2 paths and a short TTL.</li><li>Connection targets are restricted by the code-level <code>ALLOWED_VAULT_HOSTS</code> allowlist in <code>app.py</code>.</li><li>Token verification uses Vault's <code>auth/token/lookup-self</code> endpoint. The token policy must permit this lookup.</li><li>Connection settings are process-memory-only. Restarting the app removes UI-added connections, so verify connections again after restart.</li><li>Do not expose this unauthenticated app to a LAN or internet. Remote deployment needs authentication, TLS, authorization, audit logging, and deployment hardening first.</li></ul></section>
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Vault Change Portal · Review & Apply{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div><div class="eyebrow">OPERATIONS WORKSPACE</div><h1>Review secret changes</h1><p class="lede">Stage instruction files, inspect the exact proposed result, then apply with version-aware safeguards.</p></div>
+  <div class="stepper"><div class="step active"><span>1</span><b>Upload</b></div><i></i><div class="step {{ 'active' if preview else '' }}"><span>2</span><b>Review</b></div><i></i><div class="step {{ 'active' if preview and preview.entries else '' }}"><span>3</span><b>Apply</b></div></div>
+</section>
+
+<section class="panel upload-panel">
+  <div class="panel-heading"><div class="section-icon">↑</div><div><h2>New change set</h2><p>Upload a folder or select individual .txt files.</p></div><span class="micro-badge">UTF-8 · max 50 files</span></div>
+  <form method="post" action="{{ url_for('preview_upload') }}" enctype="multipart/form-data" class="upload-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <fieldset class="environment-field"><legend>Target environment</legend><div class="environment-grid">
+      {% for name, item in environments.items() %}
+      <label class="env-option {{ item.tone }} {% if name == 'Prod' %}env-prod{% endif %}">
+        <input type="radio" name="environment" value="{{ name }}" {% if name == 'Sandbox' %}checked{% endif %} required>
+        <span class="env-radio"></span><span class="env-copy"><strong>{{ name }}</strong></span>
+        <span class="env-tag">CONTROLLED</span>
+      </label>
+      {% endfor %}
+    </div></fieldset>
+    <div class="upload-zone">
+      <div class="upload-symbol">↥</div><h3>Choose instruction files</h3><p>Drop is not required — use either picker below. Files are processed in memory, not saved to a public folder.</p>
+      <div class="picker-row">
+        <label class="file-picker primary-picker"><span>▤</span> Select folder<input type="file" name="files" accept=".txt,text/plain" multiple webkitdirectory directory></label>
+        <span class="or-label">or</span>
+        <label class="file-picker secondary-picker"><span>＋</span> Select .txt files<input type="file" name="files" accept=".txt,text/plain" multiple></label>
+      </div>
+      <div id="selected-files" class="selected-files" aria-live="polite"><strong>No files selected yet</strong><span>Selected file names will appear here before preview.</span></div>
+      <p class="picker-note">Folder selection is supported by Chromium-based browsers and some others; if it is unavailable, choose individual files. Only .txt files are accepted.</p>
+    </div>
+    <div class="upload-actions"><div class="privacy-note"><span>⌑</span><span><strong>Session-bound preview</strong><small>Expires after 15 minutes · CSRF protected</small></span></div><button class="btn btn-primary" type="submit">Build preview <span>→</span></button></div>
+  </form>
+</section>
+
+{% if preview %}
+<section class="review-section" id="review">
+  <div class="review-title-row"><div><div class="eyebrow">CHANGE SET · {{ preview.entries|length }} FILE{{ '' if preview.entries|length == 1 else 'S' }}</div><h2>Review proposed changes</h2><p class="muted">Preview is read-only. Apply actions use Vault KV v2 check-and-set.</p></div><form method="post" action="{{ url_for('clear_preview') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost" type="submit">Clear preview ×</button></form></div>
+  <div class="summary-grid">
+    <div class="summary-card"><span class="summary-label">Target environment</span><strong class="env-text-{{ preview.environment|lower }}">{{ preview.environment }}</strong><small>Selected Vault target</small></div>
+    <div class="summary-card"><span class="summary-label">Files uploaded</span><strong>{{ preview.entries|length }}</strong><small>Instruction files parsed</small></div>
+    <div class="summary-card"><span class="summary-label">With changes</span><strong>{{ preview.entries|selectattr('changed')|list|length }}</strong><small>Proposed data differs</small></div>
+    <div class="summary-card"><span class="summary-label">Unchanged</span><strong>{{ preview.entries|rejectattr('changed')|list|length }}</strong><small>No version will be created</small></div>
+  </div>
+  {% if preview.environment == 'Prod' %}
+  <div class="prod-warning"><strong>Production safeguard</strong><span>Type <b>Prod</b> in the confirmation field for each apply action. This is an operator safety check, not a second-person approval.</span></div>
+  {% endif %}
+  <div class="batch-warning"><span class="warning-icon">!</span><div><strong>Batch writes are not atomic</strong><p>“Make all changes” preflights versions first, then writes one secret at a time. If a later write fails, earlier successful writes are not rolled back. An uncertain network outcome stops the batch and must not be retried automatically.</p></div></div>
+  {% set pending_count = preview.entries|selectattr('status', 'equalto', 'pending')|list|length %}
+  <div class="batch-actions">
+    <div><strong>{{ pending_count }} pending change{{ '' if pending_count == 1 else 's' }}</strong><span>Each file can also be applied individually.</span></div>
+    <form method="post" action="{{ url_for('apply_all') }}" class="batch-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% if preview.environment == 'Prod' %}<label class="prod-input"><span>Type Prod to confirm</span><input name="prod_confirmation" autocomplete="off" placeholder="Prod" required></label>{% endif %}<button class="btn btn-apply" type="submit" {% if pending_count == 0 %}disabled{% endif %}>Make all changes <span>→</span></button></form>
+  </div>
+
+  <div class="file-list">
+  {% for entry in preview.entries %}
+    <article class="file-card">
+      <div class="file-card-head">
+        <div class="file-ident"><div class="file-icon">TXT</div><div><h3>{{ entry.filename }}</h3><div class="path-line"><span class="path-label">SECRET</span><code>{{ entry.secret_path }}</code></div></div></div>
+        <span class="status status-{{ entry.status }}">{{ entry.status.replace('_', ' ') }}</span>
+      </div>
+      <div class="file-meta"><span><small>Environment</small><strong>{{ entry.environment }}</strong></span><span><small>Current KV version</small><strong>{{ entry.version if entry.version is not none else 'Not created' }}</strong></span><span><small>Requested operations</small><strong>{{ entry.operations|length }} operation{{ '' if entry.operations|length == 1 else 's' }}</strong></span><span><small>Result</small><strong>{{ 'Changes detected' if entry.changed else 'No data change' }}</strong></span></div>
+      <div class="operations"><span class="mini-heading">OPERATIONS</span>{% for op in entry.operations %}<span class="operation-chip"><b>{{ 'SET_NESTED' if op.type == 'set_nested' else 'SET' }}</b><code>{% if op.type == 'set_nested' %}{{ op.key }} : {{ op.sub_key }}{% else %}{{ op.key }}{% endif %}{% if op.reference %} ← {{ op.reference }}{% endif %}</code></span>{% endfor %}</div>
+      <div class="diff-grid">
+        <section class="diff-pane before-pane"><div class="diff-header"><span class="diff-dot"></span><strong>BEFORE</strong><small>{{ entry.before|length }} key{{ '' if entry.before|length == 1 else 's' }}</small></div><div class="diff-content">
+          {% if entry.changed %}
+            {% for key, value in entry.before.items()|sort %}
+              {% if key not in entry.after or entry.after[key] != value %}<div class="diff-line removed"><span>−</span><code>{{ key }} = {{ value }}</code></div>
+              {% elif key in entry.after %}<div class="diff-line neutral"><span>·</span><code>{{ key }} = {{ value }}</code></div>{% endif %}
+            {% endfor %}
+            {% if not entry.before %}<div class="empty-diff">Secret does not exist yet.</div>{% endif %}
+          {% else %}{% for key, value in entry.before.items()|sort %}<div class="diff-line neutral"><span>·</span><code>{{ key }} = {{ value }}</code></div>{% else %}<div class="empty-diff">No existing secret data.</div>{% endfor %}{% endif %}
+        </div></section>
+        <section class="diff-pane after-pane"><div class="diff-header"><span class="diff-dot"></span><strong>AFTER</strong><small>{{ entry.after|length }} key{{ '' if entry.after|length == 1 else 's' }}</small></div><div class="diff-content">
+          {% for key, value in entry.after.items()|sort %}
+            {% if key not in entry.before or entry.before[key] != value %}<div class="diff-line added"><span>+</span><code>{{ key }} = {{ value }}</code></div>
+            {% else %}<div class="diff-line neutral"><span>·</span><code>{{ key }} = {{ value }}</code></div>{% endif %}
+          {% else %}<div class="empty-diff">The resulting secret has no keys.</div>{% endfor %}
+        </div></section>
+      </div>
+      {% if entry.error %}<div class="entry-error"><strong>{{ entry.status.replace('_', ' ')|upper }}</strong> — {{ entry.error }}</div>{% endif %}
+      {% if entry.status == 'pending' %}
+      <div class="file-card-actions"><span class="unchanged-note">{% if entry.changed %}<span class="green-dot"></span> Ready to apply{% else %}No write needed{% endif %}</span><form method="post" action="{{ url_for('apply_one', entry_id=entry.id) }}" class="single-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% if preview.environment == 'Prod' %}<label class="prod-input inline-prod"><span>Confirm Prod</span><input name="prod_confirmation" autocomplete="off" placeholder="Prod" required></label>{% endif %}<button class="btn btn-small {{ 'btn-apply' if entry.changed else 'btn-muted' }}" type="submit" {% if not entry.changed %}disabled{% endif %}>Make change <span>→</span></button></form></div>
+      {% elif entry.status == 'applied' %}<div class="result-note result-success">✓ Change applied successfully.</div>
+      {% elif entry.status == 'unchanged' %}<div class="result-note">＝ No change required; no new version created.</div>{% endif %}
+    </article>
+  {% endfor %}
+  </div>
+  <p class="expiry-note">Preview expires 15 minutes after creation. Refreshing or sharing the URL does not transfer the preview to another browser session.</p>
+</section>
+{% else %}
+<section class="how-section"><div class="how-head"><div class="eyebrow">DESIGNED FOR SAFE CHANGES</div><h2>From instruction to verified change</h2></div><div class="how-grid"><div class="how-card"><span>01</span><h3>Upload</h3><p>Select a target environment and upload .txt files from your machine.</p></div><div class="how-card"><span>02</span><h3>Review</h3><p>Inspect final before/after values and the KV version used for the preview.</p></div><div class="how-card"><span>03</span><h3>Apply</h3><p>Apply one file or the pending batch with stale-version and duplicate-write safeguards.</p></div></div></section>
+<section class="format-panel"><div><div class="eyebrow">INSTRUCTION FORMAT</div><h2>Simple, explicit changes</h2><p class="muted">One secret path per file. Values may be literal strings or references to another secret key.</p></div><pre><code>SECRET: TEST_gcp
+SET gcp_id = 1234452
+SET gcp_name = demo-project
+
+# Reuse a value from another secret/key
+SECRET: team/service-config
+SET gcp_id = Key: <TEST_gcp.gcp_id>
+
+# Update a value inside a multiline string
+SECRET: TEST_token
+SET_NESTED token_gcp : gcp_token = NEW_DEMO_TOKEN</code></pre></section>
+{% endif %}
+<script src="{{ url_for('static', filename='app.js') }}" defer></script>
+{% endblock %}

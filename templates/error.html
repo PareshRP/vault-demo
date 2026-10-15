@@ -1,0 +1,2 @@
+{% extends "base.html" %}
+{% block content %}<section class="error-page"><div class="error-code">{{ code }}</div><h1>We couldn't complete that request</h1><p>{{ message }}</p><a class="btn btn-primary" href="{{ url_for('index') }}">Return to workspace</a></section>{% endblock %}

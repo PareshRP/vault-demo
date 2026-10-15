@@ -1,0 +1,3 @@
+# Synthetic demo value only — never use real tokens in examples
+SECRET: TEST_token
+SET_NESTED token_gcp : gcp_token = NEW_DEMO_TOKEN_456

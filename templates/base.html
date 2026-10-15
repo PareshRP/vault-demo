@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{% block title %}Vault Change Portal{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="{{ url_for('index') }}">
+    <span class="brand-mark">V</span>
+    <span><strong>Vault Change Portal</strong><small>Secrets operations · local workspace · Updated build</small></span>
+  </a>
+  <nav class="main-nav" aria-label="Main navigation">
+    <a href="{{ url_for('index') }}" class="{{ 'nav-active' if request.endpoint == 'index' else '' }}">Change review</a>
+    <a href="{{ url_for('connections_page') }}" class="{{ 'nav-active' if request.endpoint == 'connections_page' else '' }}">Connections</a>
+  </nav>
+  <div class="topbar-right">
+    <span class="mode-pill {{ 'mode-real' if mode == 'REAL' else 'mode-demo' }}"><span class="pulse"></span>{{ mode }} MODE</span>
+    <span class="local-chip"><span class="lock">⌑</span> Local only</span>
+  </div>
+</header>
+<main class="shell">
+  {% if mode == 'DEMO' %}
+  <div class="banner demo-banner"><span class="banner-icon">✦</span><div><strong>DEMO MODE — no changes are made to Vault</strong><p>Uses synthetic sample data. Upload, preview and apply are fully interactive, but nothing is sent to a real Vault server.</p></div></div>
+  {% else %}
+  <div class="banner real-banner"><span class="banner-icon">!</span><div><strong>REAL MODE — writes can change live secrets</strong><p>Verify the environment and every diff before applying. Network write failures may have an unknown outcome.</p></div></div>
+  {% endif %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}<section class="flash-stack" aria-live="polite">{% for category, message in messages %}<div class="flash flash-{{ category }}"><span>{{ '✓' if category == 'success' else '!' }}</span>{{ message }}</div>{% endfor %}</section>{% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+<footer class="footer"><span>Vault Change Portal <span class="dot">·</span> KV v2</span><span>Preview values may be sensitive. Use only on a trusted machine.</span></footer>
+</body>
+</html>

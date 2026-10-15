@@ -1,0 +1,4 @@
+# Synthetic demo values only
+SECRET: TEST_gcp
+SET gcp_id = 1234452
+SET gcp_name = demo-project

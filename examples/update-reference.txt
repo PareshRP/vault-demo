@@ -1,0 +1,2 @@
+SECRET: team/service-config
+SET gcp_id = Key: <TEST_gcp.gcp_id>
