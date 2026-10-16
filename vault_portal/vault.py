@@ -1,5 +1,6 @@
 import copy
 import requests
+import hvac
 
 class VaultError(RuntimeError):
     def __init__(self, message, stale=False):
@@ -78,12 +79,24 @@ class RealVault:
         except ValueError:
             raise VaultError("Vault returned an unexpected response.")
 
-    def test_connection(self):
-        """Validate the token against Vault's token self-lookup endpoint."""
-        result = self._request("GET", "auth/token/lookup-self")
-        if not isinstance(result, dict) or not result.get("data"):
-            raise VaultError("Vault did not confirm this token. Check the address and token policy.")
+   def test_connection(self):
+    """Validate Vault token using hvac, as in the working script."""
+    try:
+        client = hvac.Client(
+            url=self.address,
+            token=self._token,
+            timeout=self.timeout,
+        )
+        if not client.is_authenticated():
+            raise VaultError("Vault authentication failed.")
         return True
+    except VaultError:
+        raise
+    except Exception:
+        raise VaultError(
+            "Vault connection validation failed. "
+            "Check the address, token, and Vault access policy."
+        )
 
     def read_secret(self, path):
         safe_path = "/".join(part for part in path.split("/") if part)
