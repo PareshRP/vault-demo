@@ -2,9 +2,9 @@ import re
 
 MAX_FILES = 50
 MAX_FILE_BYTES = 256 * 1024
-KEY_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
+KEY_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_. -]{0,127}$")
 PATH_RE = re.compile(r"^[A-Za-z0-9_./-]{1,240}$")
-SET_RE = re.compile(r"^SET\s+([A-Za-z0-9_.-]{1,128})\s*=\s*(.*)$")
+SET_RE = re.compile(r"^SET\s+(.+?)\s*=\s*(.*)$")
 NESTED_RE = re.compile(r"^SET_NESTED\s+([A-Za-z0-9_.-]{1,128})\s*:\s*([A-Za-z0-9_.-]{1,128})\s*=\s*(.*)$")
 REFERENCE_RE = re.compile(r"^Key:\s*<([A-Za-z0-9_./-]+)\.([A-Za-z0-9_.-]{1,128})>$")
 
